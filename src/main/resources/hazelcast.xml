@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<hazelcast xmlns="http://www.hazelcast.com/schema/config">
+    <properties>
+        <property name="hazelcast.logging.type">slf4j</property>
+        <property name="hazelcast.shutdownhook.enabled">true</property>
+        <property name="hazelcast.version.check.enabed">false</property>
+        <property name="hazelcast.backpressure.enabled">true</property>
+        <property name="hazelcast.health.monitoring.delay.seconds">120</property>
+        <property name="hazelcast.operation.call.timeout.millis">10000</property>
+        <property name="hazelcast.max.no.heartbeat.seconds">60</property>
+        <property name="hazelcast.max.no.master.confirmation.seconds">120</property>
+        <property name="hazelcast.partition.migration.timeout">120</property>
+        <property name="hazelcast.phone.home.enabled">false</property>
+    </properties>
+    <group>
+        <name>dev</name>
+        <password>dev-pass</password>
+    </group>
+
+    <network>
+        <port auto-increment="true" port-count="100">5701</port>
+        <join>
+            <multicast enabled="false"/>
+            <tcp-ip enabled="true">
+                <members>localhost</members>
+            </tcp-ip>
+        </join>
+    </network>
+
+    <map name="asyncBackupMap">
+        <async-backup-count>1</async-backup-count>
+    </map>
+</hazelcast>
