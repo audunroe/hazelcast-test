@@ -5,7 +5,6 @@ import com.hazelcast.config.FileSystemXmlConfig;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IMap;
-import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -15,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import java.io.FileNotFoundException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -30,11 +30,6 @@ public class HazelcastMemCostTest {
     @BeforeClass
     public static void beforeClass() throws FileNotFoundException {
         config = new FileSystemXmlConfig(HazelcastMemCostTest.class.getResource("/hazelcast.xml").getFile());
-    }
-
-    @After
-    public void tearDown() {
-        Hazelcast.shutdownAll();
     }
 
     /*
@@ -65,17 +60,17 @@ public class HazelcastMemCostTest {
         final int numInstances = 4;
         final int numEntries = 10_000;
         log.info ("#### Starting {} hazelcast instances", numInstances);
-
-        // Start instance then wait until each instance sees at least the expected member count (+ any manually started ones)
-        // before proceeding. Not really necessary but makes it easier to look at stats if numbers don't fluctuate initialy due to repartitioning.
+        // Start instance then wait until each instance sees at least 'numInstances' members including itself (up to fjp.size members).
+        // before proceeding. Not really necessary but makes it easier to look at stats if numbers don't fluctuate too much initially due to repartitioning.
+        final ForkJoinPool fjp = new ForkJoinPool(8);
         List<CompletableFuture<HazelcastInstance>> futures = IntStream.range(0, numInstances)
                 .mapToObj(n -> CompletableFuture.supplyAsync(() -> {
                     log.debug("starting instance #{}", n);
                     HazelcastInstance instance = Hazelcast.newHazelcastInstance(config);
                     int currentSize=0;
-                    for (int retries=0;retries<60;retries++) {
+                    for (int retries=0;retries<120;retries++) {
                         currentSize = instance.getCluster().getMembers().size();
-                        if (currentSize >= numInstances) {
+                        if (currentSize >= Math.min(fjp.getPoolSize(), numInstances)) {
                             return instance;
                         } else {
                             try {
@@ -85,7 +80,7 @@ public class HazelcastMemCostTest {
                         }
                     }
                     throw new RuntimeException("Gave up waiting for cluster size to reach minimum expected size ("+ currentSize +")");
-                })).collect(Collectors.toList());
+                }, fjp)).collect(Collectors.toList());
 
         List<HazelcastInstance> hazelcastInstances = futures.stream().map(CompletableFuture::join).collect(Collectors.toList());
         HazelcastInstance hz0 = hazelcastInstances.get(0);
@@ -101,6 +96,7 @@ public class HazelcastMemCostTest {
 
         // keep alive for a bit to see how things develop with an idle cluster.
         Thread.sleep(60000);
+        log.info("#### Done sleeping.");
     }
 
 }
